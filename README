@@ -5,7 +5,14 @@ This is a mirror of http://www.vim.org/scripts/script.php?script_id=3618
  Links syntax currently supported follows Github's Gollum (https://github.com/github/gollum)
  ie [[My link|My displayed link]]
 
+ This plugin also detects footerbar and sidebar files and splits the window
+ accordingly (again, see Gollum for syntax)
+
 Usage
  -----
   Hit the ENTER key when the cursor is on a wiki link
   The corresponding file is loaded in the current buffer
+
+ Contribute
+ ----------
+  You can fork this project on Github : https://github.com/mmai/wikilink
