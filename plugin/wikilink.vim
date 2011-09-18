@@ -1,17 +1,23 @@
 " File: wikilink.vim
 " Author: Henri Bourcereau 
-" Version: 0.3
-" Last Modified: June 15, 2011
+" Version: 0.4
+" Last Modified: September 18, 2011
 "
 " "WikiLink" is a Vim plugin which eases the navigation between files 
 " in a personnal wiki
-" Links syntax currently supported follows Github's Gollum (https://github.com/github/gollum)  ie [[My link|My displayed link]]
-" This plugin also detects footerbar and sidebar files and splits the window
+" Links syntax currently supported follows Github's Gollum (https://github.com/github/gollum)  ie [[My displayed link|My link]]
+" This plugin also detects footer and sidebar files and splits the window
 " accordingly (again, see Gollum for syntax)
 "
 " Installation
 " ------------
 " Copy the wikilink.vim file into the $HOME/.vim/plugin/ directory
+"
+" Configuration
+" -------------
+" Window split on footer and sidebar detection can be disabled by writing this
+" line on your .vimrc file :
+" let wikilinkAutosplit="off"
 "
 " Usage
 " -----
@@ -22,19 +28,30 @@
 " ----------
 " You can fork this project on Github : https://github.com/mmai/wikilink
 
+"initVariable borrowed from NERDTree
+function! s:initVariable(var, value)
+    if !exists(a:var)
+        exec 'let ' . a:var . ' = ' . "'" . a:value . "'"
+        return 1
+    endif
+    return 0
+endfunction
 
-"Initialize constants
-let s:footerbar = "_Footerbar"
-let s:sidebar = "_Sidebar"
+"Initialize variables
+call s:initVariable("g:wikilinkAutosplit", "on")
+call s:initVariable("g:wikilinkOnEnter", "on")
 
-let s:startWord = '[['
-let s:endWord = ']]'
-let s:sepWord = '|'
+call s:initVariable("s:footer", "_Footer")
+call s:initVariable("s:sidebar", "_Sidebar")
+call s:initVariable("s:startWord", '[[')
+call s:initVariable("s:endWord", ']]')
+call s:initVariable("s:sepWord", '|')
+
 
 "Move the cursor to the main window (not the sidebar or the bottombar)
 function! WikiLinkGotoMainWindow()
   let cur_file_name = fnamemodify(bufname("%"), ":t:r")
-  if (cur_file_name == s:footerbar)
+  if (cur_file_name == s:footer)
     exec "winc k "
   elseif (cur_file_name == s:sidebar)
     exec "winc l "
@@ -57,7 +74,11 @@ function! WikiLinkGetWord()
 
   if !empty(word)
     "Only return the link part
-    let word = split(word, s:sepWord)[0]
+    if word =~ s:sepWord
+      let word = split(word, s:sepWord)[1]
+    else
+      let word = split(word, s:sepWord)[0]
+    endif
 
     "substitute spaces by dashes
     let word = substitute(word, '[ /]', '-', 'g')
@@ -73,7 +94,11 @@ function! WikiLinkWordFilename(word)
     let cur_file_name = bufname("%")
     let dir = fnamemodify(cur_file_name, ":h")
     if !empty(dir)
-      let dir = dir."/"
+      if (dir == ".")
+        let dir = ""
+      else
+        let dir = dir."/"
+      endif
     endif
     let extension = fnamemodify(cur_file_name, ":e")
     let file_name = dir.a:word.".".extension
@@ -85,6 +110,12 @@ function! WikiLinkGotoLink()
   let link = WikiLinkWordFilename(WikiLinkGetWord())
   if !empty(link)
     call WikiLinkGotoMainWindow()
+    "Search in subdirectories
+    let mypath =  fnamemodify(bufname("%"), ":p:h")."/**"
+    let existing_link = findfile(link, mypath)
+    if !empty(existing_link)
+      let link = existing_link
+    endif
     exec "edit " . link 
   endif
 endfunction
@@ -112,31 +143,38 @@ function! WikiLinkDetectFile(word)
 endfunction
 
 function! WikiLinkShowStructure()
-  let cur_file_name = fnamemodify(bufname("%"), ":t:r")
-  if cur_file_name != s:footerbar && cur_file_name != s:sidebar
-    "close all windows except active one
-    exec "winc o"
+  if g:wikilinkAutosplit == 'on'
+    let cur_file_name = fnamemodify(bufname("%"), ":t:r")
+    if cur_file_name != s:footer && cur_file_name != s:sidebar
+      "Remove existing footer and sidebar
+      silent! exec "bdelete " . s:footer
+      silent! exec "bdelete " . s:sidebar
 
-    "Detect footerbar
-    let footer_bar = WikiLinkDetectFile(s:footerbar)
-    if filereadable(footer_bar)
-      exec "botright 7 split " . footer_bar
-      call WikiLinkGotoMainWindow()
-    endif
+      "Detect sidebar
+      let side_bar = WikiLinkDetectFile(s:sidebar)
+      if filereadable(side_bar)
+        exec "leftabove 30 vsplit " . side_bar
+        call WikiLinkGotoMainWindow()
+      endif
 
-    "Detect sidebar
-    let side_bar = WikiLinkDetectFile(s:sidebar)
-    if filereadable(side_bar)
-      exec "topleft 30 vsplit " . side_bar
-      call WikiLinkGotoMainWindow()
+      "Detect footer
+      let footer_bar = WikiLinkDetectFile(s:footer)
+      if filereadable(footer_bar)
+        exec "rightbelow 7 split " . footer_bar
+        call WikiLinkGotoMainWindow()
+      endif
     endif
   endif
 endfunction
 
-nmap <silent> <CR> :call WikiLinkGotoLink()<CR>
+command! WikiLinkGotoLink call WikiLinkGotoLink()
+nnoremap <script> <Plug>WikiLinkGotoLink :WikiLinkGotoLink<CR>
+if !hasmapto('<Plug>WikiLinkGotoLink')
+  nmap <silent> <CR> <Plug>WikiLinkGotoLink
+endif
 
 augroup wikilink
-au!
-au BufNewFile,BufRead *.asciidoc,*.creole,*.markdown,*.mdown,*.mkdn,*.mkd,*.md,*.org,*.pod,*.rdoc,*.rest.txt,*.rst.txt,*.rest,*.rst,*.textile,*.mediawiki,*.wiki	call WikiLinkShowStructure()
+  au!
+  au BufNewFile,BufRead *.asciidoc,*.creole,*.markdown,*.mdown,*.mkdn,*.mkd,*.md,*.org,*.pod,*.rdoc,*.rest.txt,*.rst.txt,*.rest,*.rst,*.textile,*.mediawiki,*.wiki	call WikiLinkShowStructure()
 augroup END
 
